@@ -61,6 +61,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func handleKeyEvent(event: CGEvent, keyCode: Int64) -> Bool {
+        if event.getIntegerValueField(.eventSourceUserData) == 999 {
+            return false // Let our simulated events pass through
+        }
+        
         guard isOverlayVisible else {
             return false
         }
@@ -73,30 +77,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 
                 if index < words.count {
                     let word = words[index]
-                    
-                    // Partial word awareness: compare last word fragment in prefix with current word
                     let fragment = getLastWordFragment(from: prefix)
-                    var textToInject = word
-                    if !fragment.isEmpty && word.lowercased().hasPrefix(fragment.lowercased()) {
-                        textToInject = String(word.dropFirst(fragment.count))
-                    }
                     
-                    let completionToInject = textToInject + " "
-                    insertText(completionToInject)
-                    
-                    // Save this word acceptance to StyleDB
-                    StyleDB.shared.saveCompletion(appName: appName, prefix: prefix, acceptedText: word)
-                    print("✅ Accepted word: [\(word)] (injected: [\(completionToInject)])")
-                    
-                    GhostOverlay.shared.currentWordIndex += 1
-                    
-                    if GhostOverlay.shared.currentWordIndex >= words.count {
-                        print("✅ All words accepted")
-                        isOverlayVisible = false
-                        GhostOverlay.shared.hide()
-                        clearPrediction()
-                    } else {
-                        GhostOverlay.shared.updateOverlayTextAndPosition()
+                    // Inject word via simulated keyboard typing with 10ms delays
+                    injectWordViaKeyboard(word: word, fragment: fragment) {
+                        // This completion runs after the keystroke simulation finishes typing the word + space
+                        StyleDB.shared.saveCompletion(appName: appName, prefix: prefix, acceptedText: word)
+                        print("✅ Accepted word: [\(word)]")
+                        
+                        GhostOverlay.shared.currentWordIndex += 1
+                        
+                        if GhostOverlay.shared.currentWordIndex >= words.count {
+                            print("✅ All words accepted")
+                            self.isOverlayVisible = false
+                            GhostOverlay.shared.hide()
+                            self.clearPrediction()
+                        } else {
+                            GhostOverlay.shared.updateOverlayTextAndPosition()
+                        }
                     }
                 } else {
                     isOverlayVisible = false
@@ -147,74 +145,73 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         isOverlayVisible = false
     }
     
-    private func insertText(_ text: String) {
-        let systemWide = AXUIElementCreateSystemWide()
-        var focusedElementObj: AnyObject?
-        let error = AXUIElementCopyAttributeValue(systemWide, kAXFocusedUIElementAttribute as CFString, &focusedElementObj)
-        guard error == .success, let focusedElement = focusedElementObj else {
-            simulateKeyboardTyping(text)
-            return
-        }
-        
-        let element = focusedElement as! AXUIElement
-        
-        // 1. Read current kAXValueAttribute
-        var valueObj: AnyObject?
-        let valueError = AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &valueObj)
-        
-        // 2. Read current kAXSelectedTextRangeAttribute
-        var selectedRangeValue: AnyObject?
-        let rangeError = AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &selectedRangeValue)
-        
-        guard valueError == .success, let fullText = valueObj as? String,
-              rangeError == .success, let rangeVal = selectedRangeValue else {
-            simulateKeyboardTyping(text)
-            return
-        }
-        
-        var range = CFRange()
-        guard AXValueGetValue(rangeVal as! AXValue, .cfRange, &range) else {
-            simulateKeyboardTyping(text)
-            return
-        }
-        
-        // 3. Insert prediction text at cursor position by replacing the selected range
-        let nsFullText = fullText as NSString
-        let prefix = nsFullText.substring(to: range.location)
-        let suffix = nsFullText.substring(from: range.location + range.length)
-        let newFullText = prefix + text + suffix
-        
-        // 4. Update kAXValueAttribute with the new complete string
-        let setStatus = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, newFullText as CFTypeRef)
-        
-        if setStatus == .success {
-            // 5. Move cursor to the end of the inserted text
-            let newCursorLocation = range.location + text.count
-            var newRange = CFRange(location: newCursorLocation, length: 0)
-            if let newRangeValue = AXValueCreate(.cfRange, &newRange) {
-                _ = AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, newRangeValue)
-            }
-        } else {
-            simulateKeyboardTyping(text)
-        }
-    }
-    
-    private func simulateKeyboardTyping(_ text: String) {
+    private func injectWordViaKeyboard(word: String, fragment: String, completion: @escaping () -> Void) {
         let source = CGEventSource(stateID: .combinedSessionState)
-        let utf16Chars = Array(text.utf16)
+        var events: [CGEvent] = []
         
+        // 1. First select the partial word fragment already typed using CGEvent with shift+left arrows
+        let fragmentLength = fragment.count
+        if fragmentLength > 0 {
+            for _ in 0..<fragmentLength {
+                if let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 123, keyDown: true) {
+                    keyDown.flags = .maskShift
+                    keyDown.setIntegerValueField(.eventSourceUserData, value: 999)
+                    events.append(keyDown)
+                }
+                if let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 123, keyDown: false) {
+                    keyUp.flags = .maskShift
+                    keyUp.setIntegerValueField(.eventSourceUserData, value: 999)
+                    events.append(keyUp)
+                }
+            }
+        }
+        
+        // 2. Then simulate typing the FULL prediction word character by character using CGEventKeyboardSetUnicodeString
+        let utf16Chars = Array(word.utf16)
         for char in utf16Chars {
             var unichar = char
-            
-            // Post Key Down
-            let keyDownEvent = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true)
-            keyDownEvent?.keyboardSetUnicodeString(stringLength: 1, unicodeString: &unichar)
-            keyDownEvent?.post(tap: .cgSessionEventTap)
-            
-            // Post Key Up
-            let keyUpEvent = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
-            keyUpEvent?.keyboardSetUnicodeString(stringLength: 1, unicodeString: &unichar)
-            keyUpEvent?.post(tap: .cgSessionEventTap)
+            if let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true) {
+                keyDown.keyboardSetUnicodeString(stringLength: 1, unicodeString: &unichar)
+                keyDown.setIntegerValueField(.eventSourceUserData, value: 999)
+                events.append(keyDown)
+            }
+            if let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) {
+                keyUp.keyboardSetUnicodeString(stringLength: 1, unicodeString: &unichar)
+                keyUp.setIntegerValueField(.eventSourceUserData, value: 999)
+                events.append(keyUp)
+            }
+        }
+        
+        // 3. Then simulate a space character
+        var spaceChar: UInt16 = 32
+        if let spaceDown = CGEvent(keyboardEventSource: source, virtualKey: 49, keyDown: true) {
+            spaceDown.keyboardSetUnicodeString(stringLength: 1, unicodeString: &spaceChar)
+            spaceDown.setIntegerValueField(.eventSourceUserData, value: 999)
+            events.append(spaceDown)
+        }
+        if let spaceUp = CGEvent(keyboardEventSource: source, virtualKey: 49, keyDown: false) {
+            spaceUp.keyboardSetUnicodeString(stringLength: 1, unicodeString: &spaceChar)
+            spaceUp.setIntegerValueField(.eventSourceUserData, value: 999)
+            events.append(spaceUp)
+        }
+        
+        if events.isEmpty {
+            completion()
+            return
+        }
+        
+        // Post events with a 10ms delay between each event
+        for (index, event) in events.enumerated() {
+            let delay = index * 10
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(delay)) {
+                event.post(tap: .cgSessionEventTap)
+                if index == events.count - 1 {
+                    // Settle time for last key event to process before executing callback
+                    DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(50)) {
+                        completion()
+                    }
+                }
+            }
         }
     }
     
