@@ -7,6 +7,7 @@ class ContextHarvester {
     private var lastActiveAppBundleId: String?
     private var typingTimer: Timer?
     private var keyboardMonitor: Any?
+    private var currentInferenceTask: Task<Void, Never>?
     
     private init() {}
     
@@ -73,6 +74,29 @@ class ContextHarvester {
         print("✍️ Typing paused (300ms) in: \(activeAppName)")
         print("  - Prefix: \(prefix)")
         print("  - Suffix: \(suffix)")
+        
+        // Only trigger Groq completion if the prefix is at least 10 characters long
+        guard prefix.count >= 10 else { return }
+        
+        // Cancel the previous running task before starting a new one
+        currentInferenceTask?.cancel()
+        
+        currentInferenceTask = Task {
+            do {
+                let prediction = try await GroqClient.complete(prefix: prefix, activeAppName: activeAppName)
+                
+                // Ensure the task wasn't cancelled before printing
+                try Task.checkCancellation()
+                
+                print("🤖 Prediction: \(prediction)")
+            } catch is CancellationError {
+                // Silently ignore cooperative cancellation
+            } catch let error as URLError where error.code == .cancelled {
+                // Silently ignore cancellation from network request
+            } catch {
+                print("❌ Groq error: \(error.localizedDescription)")
+            }
+        }
     }
     
     private func getSurroundingText() -> (prefix: String, suffix: String) {
