@@ -163,95 +163,111 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func injectWordViaKeyboard(word: String, fragment: String, completion: @escaping () -> Void) {
         let source = CGEventSource(stateID: .combinedSessionState)
-        var events: [CGEvent] = []
+        
+        // 1. Store current clipboard contents to restore later
+        let pasteboard = NSPasteboard.general
+        var clipboardBackup: [NSPasteboardItem] = []
+        if let items = pasteboard.pasteboardItems {
+            for item in items {
+                let backupItem = NSPasteboardItem()
+                for type in item.types {
+                    if let data = item.data(forType: type) {
+                        backupItem.setData(data, forType: type)
+                    }
+                }
+                clipboardBackup.append(backupItem)
+            }
+        }
+        
+        // 2. Set NSPasteboard.general string to the word + space
+        pasteboard.clearContents()
+        pasteboard.declareTypes([.string], owner: nil)
+        pasteboard.setString(word + " ", forType: .string)
+        
+        // Helper to simulate Cmd+V paste (keycode 9 with .maskCommand flag)
+        func performPaste() {
+            guard let cmdVDown = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true) else {
+                completion()
+                return
+            }
+            cmdVDown.flags = .maskCommand
+            cmdVDown.setIntegerValueField(.eventSourceUserData, value: 999)
+            
+            guard let cmdVUp = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false) else {
+                completion()
+                return
+            }
+            cmdVUp.flags = .maskCommand
+            cmdVUp.setIntegerValueField(.eventSourceUserData, value: 999)
+            
+            cmdVDown.post(tap: .cgSessionEventTap)
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(10)) {
+                cmdVUp.post(tap: .cgSessionEventTap)
+                
+                // After 50ms restore original clipboard contents
+                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(50)) {
+                    pasteboard.clearContents()
+                    if !clipboardBackup.isEmpty {
+                        pasteboard.writeObjects(clipboardBackup)
+                    }
+                    completion()
+                }
+            }
+        }
         
         let hasOverlap = !fragment.isEmpty && word.lowercased().hasPrefix(fragment.lowercased())
         
         if hasOverlap {
-            // Simulate backspace keystrokes to delete the fragment first (keycode 51)
             let fragmentLength = fragment.count
-            for _ in 0..<fragmentLength {
-                if let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: true) {
-                    keyDown.setIntegerValueField(.eventSourceUserData, value: 999)
-                    events.append(keyDown)
-                }
-                if let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: false) {
-                    keyUp.setIntegerValueField(.eventSourceUserData, value: 999)
-                    events.append(keyUp)
-                }
-            }
             
-            // Then type the full prediction word character by character
-            let utf16Chars = Array(word.utf16)
-            for char in utf16Chars {
-                var unichar = char
-                if let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true) {
-                    keyDown.keyboardSetUnicodeString(stringLength: 1, unicodeString: &unichar)
-                    keyDown.setIntegerValueField(.eventSourceUserData, value: 999)
-                    events.append(keyDown)
-                }
-                if let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) {
-                    keyUp.keyboardSetUnicodeString(stringLength: 1, unicodeString: &unichar)
-                    keyUp.setIntegerValueField(.eventSourceUserData, value: 999)
-                    events.append(keyUp)
-                }
-            }
-            
-            // Then type a space
-            var spaceChar: UInt16 = 32
-            if let spaceDown = CGEvent(keyboardEventSource: source, virtualKey: 49, keyDown: true) {
-                spaceDown.keyboardSetUnicodeString(stringLength: 1, unicodeString: &spaceChar)
-                spaceDown.setIntegerValueField(.eventSourceUserData, value: 999)
-                events.append(spaceDown)
-            }
-            if let spaceUp = CGEvent(keyboardEventSource: source, virtualKey: 49, keyDown: false) {
-                spaceUp.keyboardSetUnicodeString(stringLength: 1, unicodeString: &spaceChar)
-                spaceUp.setIntegerValueField(.eventSourceUserData, value: 999)
-                events.append(spaceUp)
-            }
-        } else {
-            // Just type the prediction word + space directly
-            let fullText = word + " "
-            let utf16Chars = Array(fullText.utf16)
-            for char in utf16Chars {
-                var unichar = char
-                let isSpace = (char == 32)
-                let vKey: UInt16 = isSpace ? 49 : 0
-                if let keyDown = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true) {
-                    keyDown.keyboardSetUnicodeString(stringLength: 1, unicodeString: &unichar)
-                    keyDown.setIntegerValueField(.eventSourceUserData, value: 999)
-                    events.append(keyDown)
-                }
-                if let keyUp = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: false) {
-                    keyUp.keyboardSetUnicodeString(stringLength: 1, unicodeString: &unichar)
-                    keyUp.setIntegerValueField(.eventSourceUserData, value: 999)
-                    events.append(keyUp)
-                }
-            }
-        }
-        
-        if events.isEmpty {
-            completion()
-            return
-        }
-        
-        // Post events with dynamic delays: 5ms for backspaces, 10ms for others
-        var cumulativeDelayMs = 0
-        for (index, event) in events.enumerated() {
-            let delay = cumulativeDelayMs
-            let isBackspace = (event.getIntegerValueField(.keyboardEventKeycode) == 51)
-            let step = isBackspace ? 5 : 10
-            cumulativeDelayMs += step
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(delay)) {
-                event.post(tap: .cgSessionEventTap)
-                if index == events.count - 1 {
-                    // Settle time for last key event to process before executing callback
-                    DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(50)) {
-                        completion()
+            // For partial word fragments, FIRST select the fragment using Shift+Left arrow (keycode 123) once per character in fragment with 15ms delay between each, then delete selection with Delete key (keycode 51), then paste full word
+            func selectCharacters(remaining: Int) {
+                if remaining <= 0 {
+                    // Delete selection with Delete key (keycode 51)
+                    guard let deleteDown = CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: true) else {
+                        performPaste()
+                        return
                     }
+                    deleteDown.setIntegerValueField(.eventSourceUserData, value: 999)
+                    
+                    guard let deleteUp = CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: false) else {
+                        performPaste()
+                        return
+                    }
+                    deleteUp.setIntegerValueField(.eventSourceUserData, value: 999)
+                    
+                    deleteDown.post(tap: .cgSessionEventTap)
+                    deleteUp.post(tap: .cgSessionEventTap)
+                    
+                    // Wait 15ms after delete before pasting
+                    DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(15)) {
+                        performPaste()
+                    }
+                    return
+                }
+                
+                // Post Shift+Left arrow (keycode 123) down and up
+                if let shiftLeftDown = CGEvent(keyboardEventSource: source, virtualKey: 123, keyDown: true) {
+                    shiftLeftDown.flags = .maskShift
+                    shiftLeftDown.setIntegerValueField(.eventSourceUserData, value: 999)
+                    shiftLeftDown.post(tap: .cgSessionEventTap)
+                }
+                
+                if let shiftLeftUp = CGEvent(keyboardEventSource: source, virtualKey: 123, keyDown: false) {
+                    shiftLeftUp.flags = .maskShift
+                    shiftLeftUp.setIntegerValueField(.eventSourceUserData, value: 999)
+                    shiftLeftUp.post(tap: .cgSessionEventTap)
+                }
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(15)) {
+                    selectCharacters(remaining: remaining - 1)
                 }
             }
+            
+            selectCharacters(remaining: fragmentLength)
+        } else {
+            performPaste()
         }
     }
     
