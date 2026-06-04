@@ -83,12 +83,17 @@ class ContextHarvester {
         
         currentInferenceTask = Task {
             do {
-                let prediction = try await GroqClient.complete(prefix: prefix, activeAppName: activeAppName)
+                // Capture frontmost application window screenshot
+                let screenshotBase64 = await ScreenshotContext.captureActiveWindow()
+                
+                // Call Groq vision prediction
+                let prediction = try await GroqClient.complete(prefix: prefix, activeAppName: activeAppName, screenshotBase64: screenshotBase64)
                 
                 // Ensure the task wasn't cancelled before printing
                 try Task.checkCancellation()
                 
                 print("🤖 Prediction: \(prediction)")
+                print("💾 Style DB ready to record on Tab accept")
             } catch is CancellationError {
                 // Silently ignore cooperative cancellation
             } catch let error as URLError where error.code == .cancelled {

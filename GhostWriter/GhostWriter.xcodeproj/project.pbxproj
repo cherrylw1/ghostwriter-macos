@@ -11,6 +11,8 @@
 		242D15D92A00000100000002 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242D15D92A00000100000005 /* main.swift */; };
 		242D15D92A00000100000020 /* ContextHarvester.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242D15D92A00000100000021 /* ContextHarvester.swift */; };
 		242D15D92A00000100000030 /* GroqClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242D15D92A00000100000031 /* GroqClient.swift */; };
+		242D15D92A00000100000040 /* ScreenshotContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242D15D92A00000100000041 /* ScreenshotContext.swift */; };
+		242D15D92A00000100000050 /* StyleDB.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242D15D92A00000100000051 /* StyleDB.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -18,6 +20,8 @@
 		242D15D92A00000100000004 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		242D15D92A00000100000021 /* ContextHarvester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextHarvester.swift; sourceTree = "<group>"; };
 		242D15D92A00000100000031 /* GroqClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroqClient.swift; sourceTree = "<group>"; };
+		242D15D92A00000100000041 /* ScreenshotContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotContext.swift; sourceTree = "<group>"; };
+		242D15D92A00000100000051 /* StyleDB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StyleDB.swift; sourceTree = "<group>"; };
 		242D15D92A00000100000005 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		242D15D92A00000100000006 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		242D15D92A00000100000007 /* GhostWriter.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GhostWriter.entitlements; sourceTree = "<group>"; };
@@ -49,6 +53,8 @@
 				242D15D92A00000100000004 /* AppDelegate.swift */,
 				242D15D92A00000100000021 /* ContextHarvester.swift */,
 				242D15D92A00000100000031 /* GroqClient.swift */,
+				242D15D92A00000100000041 /* ScreenshotContext.swift */,
+				242D15D92A00000100000051 /* StyleDB.swift */,
 				242D15D92A00000100000006 /* Info.plist */,
 				242D15D92A00000100000007 /* GhostWriter.entitlements */,
 			);
@@ -136,6 +142,8 @@
 				242D15D92A00000100000001 /* AppDelegate.swift in Sources */,
 				242D15D92A00000100000020 /* ContextHarvester.swift in Sources */,
 				242D15D92A00000100000030 /* GroqClient.swift in Sources */,
+				242D15D92A00000100000040 /* ScreenshotContext.swift in Sources */,
+				242D15D92A00000100000050 /* StyleDB.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -265,6 +273,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = "-lsqlite3";
 				PRODUCT_BUNDLE_IDENTIFIER = com.personal.GhostWriter;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -288,6 +297,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				OTHER_LDFLAGS = "-lsqlite3";
 				PRODUCT_BUNDLE_IDENTIFIER = com.personal.GhostWriter;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
