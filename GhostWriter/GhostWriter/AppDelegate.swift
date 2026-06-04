@@ -66,23 +66,48 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         if keyCode == 48 { // Tab key
-            isOverlayVisible = false
-            if let prediction = currentPrediction,
-               let prefix = currentPrefix,
-               let appName = currentAppName {
+            if let appName = currentAppName {
+                let (prefix, _) = ContextHarvester.shared.getSurroundingText()
+                let words = GhostOverlay.shared.words
+                let index = GhostOverlay.shared.currentWordIndex
                 
-                // Inject prediction text via AXUIElement (with CGEvent fallback)
-                insertText(prediction)
-                
-                // Save to StyleDB
-                StyleDB.shared.saveCompletion(appName: appName, prefix: prefix, acceptedText: prediction)
-                
-                print("✅ Accepted: [\(prediction)]")
-                print("💾 Saved to style DB")
+                if index < words.count {
+                    let word = words[index]
+                    
+                    // Partial word awareness: compare last word fragment in prefix with current word
+                    let fragment = getLastWordFragment(from: prefix)
+                    var textToInject = word
+                    if !fragment.isEmpty && word.lowercased().hasPrefix(fragment.lowercased()) {
+                        textToInject = String(word.dropFirst(fragment.count))
+                    }
+                    
+                    let completionToInject = textToInject + " "
+                    insertText(completionToInject)
+                    
+                    // Save this word acceptance to StyleDB
+                    StyleDB.shared.saveCompletion(appName: appName, prefix: prefix, acceptedText: word)
+                    print("✅ Accepted word: [\(word)] (injected: [\(completionToInject)])")
+                    
+                    GhostOverlay.shared.currentWordIndex += 1
+                    
+                    if GhostOverlay.shared.currentWordIndex >= words.count {
+                        print("✅ All words accepted")
+                        isOverlayVisible = false
+                        GhostOverlay.shared.hide()
+                        clearPrediction()
+                    } else {
+                        GhostOverlay.shared.updateOverlayTextAndPosition()
+                    }
+                } else {
+                    isOverlayVisible = false
+                    GhostOverlay.shared.hide()
+                    clearPrediction()
+                }
+            } else {
+                isOverlayVisible = false
+                GhostOverlay.shared.hide()
+                clearPrediction()
             }
-            
-            GhostOverlay.shared.hide()
-            clearPrediction()
             return true // Suppress Tab key
         } else if keyCode == 53 { // Escape key
             isOverlayVisible = false
@@ -104,6 +129,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             clearPrediction()
             return false // Let the key event pass through to target application
         }
+    }
+    
+    private func getLastWordFragment(from prefix: String) -> String {
+        if prefix.isEmpty { return "" }
+        if let lastChar = prefix.last, lastChar.isWhitespace {
+            return ""
+        }
+        let components = prefix.components(separatedBy: .whitespacesAndNewlines)
+        return components.last ?? ""
     }
     
     private func clearPrediction() {

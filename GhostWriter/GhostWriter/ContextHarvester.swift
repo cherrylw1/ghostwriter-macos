@@ -118,7 +118,7 @@ class ContextHarvester {
         }
     }
     
-    private func getFocusedElementCursorRect() -> CGRect? {
+    func getFocusedElementCursorRect() -> CGRect? {
         let systemWide = AXUIElementCreateSystemWide()
         var focusedElementObj: AnyObject?
         let error = AXUIElementCopyAttributeValue(systemWide, kAXFocusedUIElementAttribute as CFString, &focusedElementObj)
@@ -140,7 +140,7 @@ class ContextHarvester {
         return nil
     }
     
-    private func getSurroundingText() -> (prefix: String, suffix: String) {
+    func getSurroundingText() -> (prefix: String, suffix: String) {
         let systemWide = AXUIElementCreateSystemWide()
         var focusedElementObj: AnyObject?
         

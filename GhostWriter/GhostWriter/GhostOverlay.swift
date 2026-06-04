@@ -34,29 +34,55 @@ class GhostOverlay: NSPanel {
         contentView!.addSubview(textField)
     }
     
+    var words: [String] = []
+    var currentWordIndex: Int = 0
+    
     func show(text: String, at cursorRect: CGRect?) {
         DispatchQueue.main.async {
-            self.textField.stringValue = text
+            self.words = text.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+            self.currentWordIndex = 0
+            
+            let remainingWords = self.words[self.currentWordIndex...]
+            self.textField.stringValue = remainingWords.joined(separator: " ")
             self.alphaValue = 1.0
             
-            let targetX: CGFloat
-            let targetY: CGFloat
-            
-            if let rect = cursorRect, let mainScreen = NSScreen.main {
-                let screenHeight = mainScreen.frame.height
-                // Position immediately to the right of the cursor bounds
-                targetX = rect.origin.x + rect.width
-                targetY = screenHeight - rect.origin.y - rect.height
-            } else {
-                // Fallback: 20px below and 0px right of the mouse cursor coordinates
-                let mouseLoc = NSEvent.mouseLocation
-                targetX = mouseLoc.x
-                targetY = mouseLoc.y - 20
+            self.positionOverlay(at: cursorRect)
+            self.orderFrontRegardless()
+        }
+    }
+    
+    func positionOverlay(at cursorRect: CGRect?) {
+        let targetX: CGFloat
+        let targetY: CGFloat
+        
+        if let rect = cursorRect, let mainScreen = NSScreen.main {
+            let screenHeight = mainScreen.frame.height
+            // Position immediately to the right of the cursor bounds
+            targetX = rect.origin.x + rect.width
+            targetY = screenHeight - rect.origin.y - rect.height
+        } else {
+            // Fallback: 20px below and 0px right of the mouse cursor coordinates
+            let mouseLoc = NSEvent.mouseLocation
+            targetX = mouseLoc.x
+            targetY = mouseLoc.y - 20
+        }
+        
+        self.setFrameOrigin(CGPoint(x: targetX, y: targetY))
+        print("🪟 Overlay shown at coordinates: [\(targetX), \(targetY)]")
+    }
+    
+    func updateOverlayTextAndPosition() {
+        DispatchQueue.main.async {
+            guard self.currentWordIndex < self.words.count else {
+                self.hide()
+                return
             }
             
-            self.setFrameOrigin(CGPoint(x: targetX, y: targetY))
-            self.orderFrontRegardless()
-            print("🪟 Overlay shown at coordinates: [\(targetX), \(targetY)]")
+            let remainingWords = self.words[self.currentWordIndex...]
+            self.textField.stringValue = remainingWords.joined(separator: " ")
+            
+            let cursorRect = ContextHarvester.shared.getFocusedElementCursorRect()
+            self.positionOverlay(at: cursorRect)
         }
     }
     
@@ -64,6 +90,8 @@ class GhostOverlay: NSPanel {
         DispatchQueue.main.async {
             self.alphaValue = 0.0
             self.orderOut(nil)
+            self.words = []
+            self.currentWordIndex = 0
         }
     }
 }
