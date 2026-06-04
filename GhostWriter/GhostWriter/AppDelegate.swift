@@ -220,55 +220,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         if hasOverlap {
             let fragmentLength = fragment.count
-            
-            // For partial word fragments, FIRST select the fragment using Shift+Left arrow (keycode 123) once per character in fragment with 15ms delay between each, then delete selection with Delete key (keycode 51), then paste full word
-            func selectCharacters(remaining: Int) {
-                if remaining <= 0 {
-                    // Delete selection with Delete key (keycode 51)
-                    guard let deleteDown = CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: true) else {
-                        performPaste()
-                        return
-                    }
-                    deleteDown.setIntegerValueField(.eventSourceUserData, value: 999)
-                    
-                    guard let deleteUp = CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: false) else {
-                        performPaste()
-                        return
-                    }
-                    deleteUp.setIntegerValueField(.eventSourceUserData, value: 999)
-                    
-                    deleteDown.post(tap: .cgSessionEventTap)
-                    deleteUp.post(tap: .cgSessionEventTap)
-                    
-                    // Wait 15ms after delete before pasting
-                    DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(15)) {
-                        performPaste()
-                    }
-                    return
-                }
-                
-                // Post Shift+Left arrow (keycode 123) down and up
-                if let shiftLeftDown = CGEvent(keyboardEventSource: source, virtualKey: 123, keyDown: true) {
-                    shiftLeftDown.flags = .maskShift
-                    shiftLeftDown.setIntegerValueField(.eventSourceUserData, value: 999)
-                    shiftLeftDown.post(tap: .cgSessionEventTap)
-                }
-                
-                if let shiftLeftUp = CGEvent(keyboardEventSource: source, virtualKey: 123, keyDown: false) {
-                    shiftLeftUp.flags = .maskShift
-                    shiftLeftUp.setIntegerValueField(.eventSourceUserData, value: 999)
-                    shiftLeftUp.post(tap: .cgSessionEventTap)
-                }
-                
-                DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(15)) {
-                    selectCharacters(remaining: remaining - 1)
-                }
+            deleteFragment(count: fragmentLength) {
+                performPaste()
             }
-            
-            selectCharacters(remaining: fragmentLength)
         } else {
             performPaste()
         }
+    }
+    
+    private func deleteFragment(count: Int, completion: @escaping () -> Void) {
+        let source = CGEventSource(stateID: .combinedSessionState)
+        
+        func backspace(remaining: Int) {
+            guard remaining > 0 else {
+                completion()
+                return
+            }
+            
+            if let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: true) {
+                keyDown.setIntegerValueField(.eventSourceUserData, value: 999)
+                keyDown.post(tap: .cgSessionEventTap)
+            }
+            
+            if let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: false) {
+                keyUp.setIntegerValueField(.eventSourceUserData, value: 999)
+                keyUp.post(tap: .cgSessionEventTap)
+            }
+            
+            DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(20)) {
+                backspace(remaining: remaining - 1)
+            }
+        }
+        
+        backspace(remaining: count)
     }
     
     private func checkAccessibility() {

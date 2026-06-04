@@ -33,34 +33,18 @@ class GroqClient {
         // Fetch recent completions from StyleDB if count is at least 10
         let completionsCount = StyleDB.shared.getCompletionsCount()
         var systemPrompt = """
-You are an AI autocomplete engine built for someone who primarily 
-writes AI prompts and Google Docs content. Their writing is direct, 
-instructional and specific — never corporate or formal.
-
-Your job: predict the next 3-5 words they are about to type.
+You are an inline autocomplete engine. Your job is to predict 
+the next 3-5 words the user is about to type based purely on 
+their current text. 
 
 Rules:
-- If they are writing an AI prompt (detected by words like write, 
-  create, generate, make, list, explain, give, describe, build, 
-  summarize, analyze) — complete it like an experienced prompt writer
-- If they are writing in Google Docs — complete it like a clear 
-  direct writer, no filler words
-- Never output comma separated lists
-- Never use corporate language like 'regulatory requirements' 
-  or 'industry standards' unless the prefix explicitly requires it
-- Never explain yourself
-- Output only the next 3-5 words as a natural continuation
-- Match the exact tone and vocabulary of the prefix
-
-Examples of good completions:
-- 'write me a detailed' → 'step by step guide'
-- 'create a list of' → 'the top 10 ways'
-- 'explain how to' → 'build this feature in'
-- 'I wanted to' → 'follow up on this'
-- 'can you help me' → 'understand how this'
-- 'generate a' → 'comprehensive breakdown of'
-- 'Hi Aaron,' → 'hope you are doing'
-- 'following up on' → 'our conversation from yesterday'
+- Continue the text naturally as any fluent writer would
+- Match the tone and style of what is already written
+- Output only the predicted words, nothing else
+- No quotes, no punctuation unless grammatically necessary
+- No commas between words
+- No lists
+- No explanation
 """
         
         if completionsCount >= 10 {
@@ -138,10 +122,19 @@ Examples of good completions:
         completion = completion.replacingOccurrences(of: "\n", with: " ")
         completion = completion.replacingOccurrences(of: "\r", with: " ")
         
-        // 2. Remove all comma characters from prediction output
+        // 2. Remove all single quote characters '
+        completion = completion.replacingOccurrences(of: "'", with: "")
+        
+        // 3. Remove all double quote characters "
+        completion = completion.replacingOccurrences(of: "\"", with: "")
+        
+        // 4. Remove all backtick characters
+        completion = completion.replacingOccurrences(of: "`", with: "")
+        
+        // 5. Remove commas that appear between words (not in contractions)
         completion = completion.replacingOccurrences(of: ",", with: "")
         
-        // 3. Split into words
+        // 6. Split into words
         let rawWords = completion.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
         
         // Remove consecutive duplicate words
@@ -158,7 +151,7 @@ Examples of good completions:
         // Take only the first 5 words of the response
         let firstFiveWords = cleanWords.prefix(5).joined(separator: " ")
         
-        // 4. Remove any trailing or leading spaces
+        // 7. Trim whitespace
         let cleanedPrediction = firstFiveWords.trimmingCharacters(in: .whitespacesAndNewlines)
         if shouldDiscard(prediction: cleanedPrediction, prefix: prefix) {
             print("⚠️ Prediction discarded — too similar to recent context")
