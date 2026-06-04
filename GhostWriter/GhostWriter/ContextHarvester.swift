@@ -98,15 +98,14 @@ class ContextHarvester {
                 print("🤖 Prediction: \(prediction)")
                 print("💾 Style DB ready to record on Tab accept")
                 
-                // Display autocomplete ghost overlay at text cursor
-                if let cursorRect = self.getFocusedElementCursorRect() {
-                    await GhostOverlay.shared.show(text: prediction, at: cursorRect)
-                    
-                    if let delegate = AppDelegate.shared {
-                        delegate.currentPrediction = prediction
-                        delegate.currentPrefix = prefix
-                        delegate.currentAppName = activeAppName
-                    }
+                // Display autocomplete ghost overlay at text cursor or fallback to mouse coordinates
+                let cursorRect = self.getFocusedElementCursorRect()
+                await GhostOverlay.shared.show(text: prediction, at: cursorRect)
+                
+                if let delegate = AppDelegate.shared {
+                    delegate.currentPrediction = prediction
+                    delegate.currentPrefix = prefix
+                    delegate.currentAppName = activeAppName
                 }
             } catch is CancellationError {
                 // Silently ignore cooperative cancellation

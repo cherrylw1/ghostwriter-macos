@@ -108,13 +108,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func insertText(_ text: String) {
-        let systemWide = AXUIElementCreateSystemWide()
-        var focusedElementObj: AnyObject?
-        let error = AXUIElementCopyAttributeValue(systemWide, kAXFocusedUIElementAttribute as CFString, &focusedElementObj)
-        guard error == .success, let focusedElement = focusedElementObj else { return }
+        let source = CGEventSource(stateID: .combinedSessionState)
+        let utf16Chars = Array(text.utf16)
         
-        // Inject the text using kAXSelectedTextAttribute (replaces selection or inserts at cursor)
-        AXUIElementSetAttributeValue(focusedElement as! AXUIElement, kAXSelectedTextAttribute as CFString, text as CFTypeRef)
+        for char in utf16Chars {
+            var unichar = char
+            
+            // Post Key Down
+            let keyDownEvent = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true)
+            keyDownEvent?.keyboardSetUnicodeString(stringLength: 1, unicodeString: &unichar)
+            keyDownEvent?.post(tap: .cgSessionEventTap)
+            
+            // Post Key Up
+            let keyUpEvent = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+            keyUpEvent?.keyboardSetUnicodeString(stringLength: 1, unicodeString: &unichar)
+            keyUpEvent?.post(tap: .cgSessionEventTap)
+        }
     }
     
     private func checkAccessibility() {
