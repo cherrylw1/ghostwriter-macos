@@ -30,19 +30,22 @@ class GroqClient {
         request.setValue("Bearer \(groqAPIKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // Fetch recent completions from StyleDB
-        let recentCompletions = StyleDB.shared.fetchRecentExamples(appName: activeAppName, limit: 3)
+        // Fetch recent completions from StyleDB if count is at least 10
+        let completionsCount = StyleDB.shared.getCompletionsCount()
         var systemPrompt = "You are an inline autocomplete engine. Predict only the next 5 words that complete the user's text. Return only the predicted words, no punctuation at the end, no explanation, nothing else."
         
-        if !recentCompletions.isEmpty {
-            let examplesText = recentCompletions.map { "- \($0)" }.joined(separator: "\n")
-            let prependedPrompt = """
-            Here are recent examples of how this user writes in \(activeAppName):
-            \(examplesText)
-            Match this style exactly.
-            
-            """
-            systemPrompt = prependedPrompt + systemPrompt
+        if completionsCount >= 10 {
+            let recentCompletions = StyleDB.shared.fetchRecentExamples(appName: activeAppName, limit: 3)
+            if !recentCompletions.isEmpty {
+                let examplesText = recentCompletions.map { "- \($0)" }.joined(separator: "\n")
+                let prependedPrompt = """
+                Here are recent examples of how this user writes in \(activeAppName):
+                \(examplesText)
+                Match this style exactly.
+                
+                """
+                systemPrompt = prependedPrompt + systemPrompt
+            }
         }
         
         // Smart Screenshot Strategy:
@@ -124,6 +127,31 @@ class GroqClient {
         let firstFiveWords = cleanWords.prefix(5).joined(separator: " ")
         
         // 3. Trim whitespace
-        return firstFiveWords.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanedPrediction = firstFiveWords.trimmingCharacters(in: .whitespacesAndNewlines)
+        if shouldDiscard(prediction: cleanedPrediction, prefix: prefix) {
+            print("⚠️ Prediction discarded — too similar to recent context")
+            throw DiscardedPredictionError()
+        }
+        return cleanedPrediction
+    }
+    
+    private static func shouldDiscard(prediction: String, prefix: String) -> Bool {
+        let predWords = prediction.components(separatedBy: .whitespacesAndNewlines)
+                                  .map { $0.trimmingCharacters(in: .punctuationCharacters).lowercased() }
+                                  .filter { !$0.isEmpty }
+        let prefixWords = prefix.components(separatedBy: .whitespacesAndNewlines)
+                                .map { $0.trimmingCharacters(in: .punctuationCharacters).lowercased() }
+                                .filter { !$0.isEmpty }
+        let lastTenPrefixWords = Array(prefixWords.suffix(10))
+        
+        var overlapCount = 0
+        for predWord in predWords {
+            if lastTenPrefixWords.contains(predWord) {
+                overlapCount += 1
+            }
+        }
+        return overlapCount > 2
     }
 }
+
+struct DiscardedPredictionError: Error {}

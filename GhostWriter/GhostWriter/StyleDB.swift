@@ -110,4 +110,20 @@ class StyleDB {
             return examples
         }
     }
+    
+    func getCompletionsCount() -> Int {
+        return dbQueue.sync {
+            let query = "SELECT COUNT(*) FROM completions;"
+            var statement: OpaquePointer?
+            var count = 0
+            
+            if sqlite3_prepare_v2(db, query, -1, &statement, nil) == SQLITE_OK {
+                if sqlite3_step(statement) == SQLITE_ROW {
+                    count = Int(sqlite3_column_int(statement, 0))
+                }
+            }
+            sqlite3_finalize(statement)
+            return count
+        }
+    }
 }

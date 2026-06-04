@@ -76,7 +76,13 @@ class ContextHarvester {
         
         let activeAppName = NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown"
         let (rawPrefix, suffix) = getSurroundingText()
-        let prefix = deduplicateConsecutiveWords(in: rawPrefix)
+        
+        // Split raw prefix by sentence boundaries and take only the last 2 sentences (capped at 500 chars)
+        var prefix = extractLastTwoSentences(from: rawPrefix)
+        if prefix.count > 500 {
+            prefix = String(prefix.suffix(500))
+        }
+        prefix = deduplicateConsecutiveWords(in: prefix)
         
         print("✍️ Typing paused (300ms) in: \(activeAppName)")
         print("  - Prefix: \(prefix)")
@@ -112,6 +118,8 @@ class ContextHarvester {
                     delegate.currentAppName = activeAppName
                     delegate.isOverlayVisible = true
                 }
+            } catch is DiscardedPredictionError {
+                // Silently ignore discarded prediction
             } catch is CancellationError {
                 // Silently ignore cooperative cancellation
             } catch let error as URLError where error.code == .cancelled {
@@ -208,5 +216,34 @@ class ContextHarvester {
             lastWord = component
         }
         return deduplicated.joined(separator: " ")
+    }
+    
+    private func extractLastTwoSentences(from text: String) -> String {
+        var separatorIndices: [String.Index] = []
+        var idx = text.startIndex
+        var lastWasSeparator = false
+        
+        while idx < text.endIndex {
+            let char = text[idx]
+            let isSeparator = (char == "." || char == "!" || char == "?" || char == "\n")
+            if isSeparator {
+                if !lastWasSeparator {
+                    separatorIndices.append(idx)
+                }
+                lastWasSeparator = true
+            } else {
+                lastWasSeparator = false
+            }
+            idx = text.index(after: idx)
+        }
+        
+        let count = separatorIndices.count
+        if count >= 2 {
+            let separatorIdx = separatorIndices[count - 2]
+            let startIdx = text.index(after: separatorIdx)
+            return String(text[startIdx...])
+        } else {
+            return text
+        }
     }
 }
