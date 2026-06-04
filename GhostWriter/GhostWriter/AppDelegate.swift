@@ -156,7 +156,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         isOverlayVisible = false
         
         isInGracePeriod = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(200)) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(400)) { [weak self] in
             self?.isInGracePeriod = false
         }
     }

@@ -106,9 +106,22 @@ class GroqClient {
         completion = completion.replacingOccurrences(of: "\n", with: " ")
         completion = completion.replacingOccurrences(of: "\r", with: " ")
         
-        // 2. Take only the first 5 words of the response
-        let words = completion.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
-        let firstFiveWords = words.prefix(5).joined(separator: " ")
+        // 2. Split into words
+        let rawWords = completion.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+        
+        // Remove consecutive duplicate words
+        var cleanWords: [String] = []
+        var lastWord: String?
+        for word in rawWords {
+            if word.lowercased() == lastWord?.lowercased() {
+                continue
+            }
+            cleanWords.append(word)
+            lastWord = word
+        }
+        
+        // Take only the first 5 words of the response
+        let firstFiveWords = cleanWords.prefix(5).joined(separator: " ")
         
         // 3. Trim whitespace
         return firstFiveWords.trimmingCharacters(in: .whitespacesAndNewlines)
