@@ -4,6 +4,7 @@ import ApplicationServices
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         checkAccessibility()
+        ContextHarvester.shared.start()
     }
     
     private func checkAccessibility() {
