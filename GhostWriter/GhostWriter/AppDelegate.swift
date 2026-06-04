@@ -165,50 +165,69 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let source = CGEventSource(stateID: .combinedSessionState)
         var events: [CGEvent] = []
         
-        // 1. First select the partial word fragment already typed using CGEvent with shift+left arrows
-        let fragmentLength = fragment.count
-        if fragmentLength > 0 {
+        let hasOverlap = !fragment.isEmpty && word.lowercased().hasPrefix(fragment.lowercased())
+        
+        if hasOverlap {
+            // Simulate backspace keystrokes to delete the fragment first (keycode 51)
+            let fragmentLength = fragment.count
             for _ in 0..<fragmentLength {
-                if let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 123, keyDown: true) {
-                    keyDown.flags = .maskShift
+                if let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: true) {
                     keyDown.setIntegerValueField(.eventSourceUserData, value: 999)
                     events.append(keyDown)
                 }
-                if let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 123, keyDown: false) {
-                    keyUp.flags = .maskShift
+                if let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 51, keyDown: false) {
                     keyUp.setIntegerValueField(.eventSourceUserData, value: 999)
                     events.append(keyUp)
                 }
             }
-        }
-        
-        // 2. Then simulate typing the FULL prediction word character by character using CGEventKeyboardSetUnicodeString
-        let utf16Chars = Array(word.utf16)
-        for char in utf16Chars {
-            var unichar = char
-            if let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true) {
-                keyDown.keyboardSetUnicodeString(stringLength: 1, unicodeString: &unichar)
-                keyDown.setIntegerValueField(.eventSourceUserData, value: 999)
-                events.append(keyDown)
+            
+            // Then type the full prediction word character by character
+            let utf16Chars = Array(word.utf16)
+            for char in utf16Chars {
+                var unichar = char
+                if let keyDown = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true) {
+                    keyDown.keyboardSetUnicodeString(stringLength: 1, unicodeString: &unichar)
+                    keyDown.setIntegerValueField(.eventSourceUserData, value: 999)
+                    events.append(keyDown)
+                }
+                if let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) {
+                    keyUp.keyboardSetUnicodeString(stringLength: 1, unicodeString: &unichar)
+                    keyUp.setIntegerValueField(.eventSourceUserData, value: 999)
+                    events.append(keyUp)
+                }
             }
-            if let keyUp = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false) {
-                keyUp.keyboardSetUnicodeString(stringLength: 1, unicodeString: &unichar)
-                keyUp.setIntegerValueField(.eventSourceUserData, value: 999)
-                events.append(keyUp)
+            
+            // Then type a space
+            var spaceChar: UInt16 = 32
+            if let spaceDown = CGEvent(keyboardEventSource: source, virtualKey: 49, keyDown: true) {
+                spaceDown.keyboardSetUnicodeString(stringLength: 1, unicodeString: &spaceChar)
+                spaceDown.setIntegerValueField(.eventSourceUserData, value: 999)
+                events.append(spaceDown)
             }
-        }
-        
-        // 3. Then simulate a space character
-        var spaceChar: UInt16 = 32
-        if let spaceDown = CGEvent(keyboardEventSource: source, virtualKey: 49, keyDown: true) {
-            spaceDown.keyboardSetUnicodeString(stringLength: 1, unicodeString: &spaceChar)
-            spaceDown.setIntegerValueField(.eventSourceUserData, value: 999)
-            events.append(spaceDown)
-        }
-        if let spaceUp = CGEvent(keyboardEventSource: source, virtualKey: 49, keyDown: false) {
-            spaceUp.keyboardSetUnicodeString(stringLength: 1, unicodeString: &spaceChar)
-            spaceUp.setIntegerValueField(.eventSourceUserData, value: 999)
-            events.append(spaceUp)
+            if let spaceUp = CGEvent(keyboardEventSource: source, virtualKey: 49, keyDown: false) {
+                spaceUp.keyboardSetUnicodeString(stringLength: 1, unicodeString: &spaceChar)
+                spaceUp.setIntegerValueField(.eventSourceUserData, value: 999)
+                events.append(spaceUp)
+            }
+        } else {
+            // Just type the prediction word + space directly
+            let fullText = word + " "
+            let utf16Chars = Array(fullText.utf16)
+            for char in utf16Chars {
+                var unichar = char
+                let isSpace = (char == 32)
+                let vKey: UInt16 = isSpace ? 49 : 0
+                if let keyDown = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true) {
+                    keyDown.keyboardSetUnicodeString(stringLength: 1, unicodeString: &unichar)
+                    keyDown.setIntegerValueField(.eventSourceUserData, value: 999)
+                    events.append(keyDown)
+                }
+                if let keyUp = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: false) {
+                    keyUp.keyboardSetUnicodeString(stringLength: 1, unicodeString: &unichar)
+                    keyUp.setIntegerValueField(.eventSourceUserData, value: 999)
+                    events.append(keyUp)
+                }
+            }
         }
         
         if events.isEmpty {
@@ -216,9 +235,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         
-        // Post events with a 10ms delay between each event
+        // Post events with dynamic delays: 5ms for backspaces, 10ms for others
+        var cumulativeDelayMs = 0
         for (index, event) in events.enumerated() {
-            let delay = index * 10
+            let delay = cumulativeDelayMs
+            let isBackspace = (event.getIntegerValueField(.keyboardEventKeycode) == 51)
+            let step = isBackspace ? 5 : 10
+            cumulativeDelayMs += step
+            
             DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(delay)) {
                 event.post(tap: .cgSessionEventTap)
                 if index == events.count - 1 {

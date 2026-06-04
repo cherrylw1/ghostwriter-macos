@@ -42,6 +42,16 @@ class GhostOverlay: NSPanel {
             self.words = text.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
             self.currentWordIndex = 0
             
+            // Part 1 - Always display the FULL first word of the prediction
+            let (prefixText, _) = ContextHarvester.shared.getSurroundingText()
+            let fragment = self.getLastWordFragment(from: prefixText)
+            if !fragment.isEmpty, let firstWord = self.words.first {
+                if !firstWord.lowercased().hasPrefix(fragment.lowercased()) {
+                    let fullFirstWord = fragment + firstWord
+                    self.words[0] = fullFirstWord
+                }
+            }
+            
             let remainingWords = self.words[self.currentWordIndex...]
             self.textField.stringValue = remainingWords.joined(separator: " ")
             self.alphaValue = 1.0
@@ -49,6 +59,15 @@ class GhostOverlay: NSPanel {
             self.positionOverlay(at: cursorRect)
             self.orderFrontRegardless()
         }
+    }
+    
+    private func getLastWordFragment(from prefix: String) -> String {
+        if prefix.isEmpty { return "" }
+        if let lastChar = prefix.last, lastChar.isWhitespace {
+            return ""
+        }
+        let components = prefix.components(separatedBy: .whitespacesAndNewlines)
+        return components.last ?? ""
     }
     
     func positionOverlay(at cursorRect: CGRect?) {
