@@ -13,6 +13,16 @@ class GroqClient {
         let choices: [Choice]
     }
     
+    private static let counterQueue = DispatchQueue(label: "com.ghostwriter.groqclient.counter")
+    private static var apiCallCount = 0
+    
+    private static func incrementAndGetCallCount() -> Int {
+        return counterQueue.sync {
+            apiCallCount += 1
+            return apiCallCount
+        }
+    }
+    
     static func complete(prefix: String, activeAppName: String, screenshotBase64: String?) async throws -> String {
         let url = URL(string: "https://api.groq.com/openai/v1/chat/completions")!
         var request = URLRequest(url: url)
@@ -35,27 +45,36 @@ class GroqClient {
             systemPrompt = prependedPrompt + systemPrompt
         }
         
-        var userContent: [[String: Any]] = [
-            ["type": "text", "text": prefix]
-        ]
+        // Smart Screenshot Strategy:
+        // Default is text-only. Vision is used on every 10th call OR when prefix length is short (< 20 chars).
+        let currentCallCount = incrementAndGetCallCount()
+        let useVision = (currentCallCount % 10 == 0) || (prefix.count < 20)
+        let model = useVision ? "meta-llama/llama-4-scout-17b-16e-instruct" : "llama-3.1-8b-instant"
         
-        if let screenshot = screenshotBase64 {
-            let imageObject: [String: Any] = [
-                "type": "image_url",
-                "image_url": [
-                    "url": "data:image/jpeg;base64,\(screenshot)"
+        let messages: [[String: Any]]
+        if useVision, let screenshot = screenshotBase64 {
+            let userContent: [[String: Any]] = [
+                ["type": "text", "text": prefix],
+                [
+                    "type": "image_url",
+                    "image_url": [
+                        "url": "data:image/jpeg;base64,\(screenshot)"
+                    ]
                 ]
             ]
-            userContent.append(imageObject)
+            messages = [
+                ["role": "system", "content": systemPrompt],
+                ["role": "user", "content": userContent]
+            ]
+        } else {
+            messages = [
+                ["role": "system", "content": systemPrompt],
+                ["role": "user", "content": prefix]
+            ]
         }
         
-        let messages: [[String: Any]] = [
-            ["role": "system", "content": systemPrompt],
-            ["role": "user", "content": userContent]
-        ]
-        
         let requestBody: [String: Any] = [
-            "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+            "model": model,
             "messages": messages,
             "temperature": 0.0,
             "max_tokens": 10
