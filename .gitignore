@@ -1,0 +1,8 @@
+# Xcode and Build Artifacts
+build/
+DerivedData/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/
+
+# OS-specific
+.DS_Store
