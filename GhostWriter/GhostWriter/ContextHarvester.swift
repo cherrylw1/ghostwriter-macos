@@ -106,6 +106,7 @@ class ContextHarvester {
                     delegate.currentPrediction = prediction
                     delegate.currentPrefix = prefix
                     delegate.currentAppName = activeAppName
+                    delegate.isOverlayVisible = true
                 }
             } catch is CancellationError {
                 // Silently ignore cooperative cancellation
@@ -183,6 +184,6 @@ class ContextHarvester {
         let prefix = Range(prefixNSRange, in: fullText).map { String(fullText[$0]) } ?? ""
         let suffix = Range(suffixNSRange, in: fullText).map { String(fullText[$0]) } ?? ""
         
-        return (prefix, suffix)
+        return (String(prefix.suffix(500)), suffix)
     }
 }

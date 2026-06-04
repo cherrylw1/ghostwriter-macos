@@ -9,6 +9,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var currentPrediction: String?
     var currentPrefix: String?
     var currentAppName: String?
+    var isOverlayVisible = false
     
     private var eventTap: CFRunLoopSource?
     
@@ -60,16 +61,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func handleKeyEvent(event: CGEvent, keyCode: Int64) -> Bool {
-        guard GhostOverlay.shared.isVisible else {
+        guard isOverlayVisible else {
             return false
         }
         
         if keyCode == 48 { // Tab key
+            isOverlayVisible = false
             if let prediction = currentPrediction,
                let prefix = currentPrefix,
                let appName = currentAppName {
                 
-                // Inject prediction text via AXUIElement
+                // Inject prediction text via AXUIElement (with CGEvent fallback)
                 insertText(prediction)
                 
                 // Save to StyleDB
@@ -83,12 +85,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             clearPrediction()
             return true // Suppress Tab key
         } else if keyCode == 53 { // Escape key
+            isOverlayVisible = false
             print("❌ Rejected")
+            
             GhostOverlay.shared.hide()
             clearPrediction()
             return true // Suppress Escape key
         } else {
             // Any other key: dismiss suggestion, log what was typed, and pass key event
+            isOverlayVisible = false
             var typed = ""
             if let nsEvent = NSEvent(cgEvent: event) {
                 typed = nsEvent.characters ?? ""
@@ -105,9 +110,62 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         currentPrediction = nil
         currentPrefix = nil
         currentAppName = nil
+        isOverlayVisible = false
     }
     
     private func insertText(_ text: String) {
+        let systemWide = AXUIElementCreateSystemWide()
+        var focusedElementObj: AnyObject?
+        let error = AXUIElementCopyAttributeValue(systemWide, kAXFocusedUIElementAttribute as CFString, &focusedElementObj)
+        guard error == .success, let focusedElement = focusedElementObj else {
+            simulateKeyboardTyping(text)
+            return
+        }
+        
+        let element = focusedElement as! AXUIElement
+        
+        // 1. Read current kAXValueAttribute
+        var valueObj: AnyObject?
+        let valueError = AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &valueObj)
+        
+        // 2. Read current kAXSelectedTextRangeAttribute
+        var selectedRangeValue: AnyObject?
+        let rangeError = AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &selectedRangeValue)
+        
+        guard valueError == .success, let fullText = valueObj as? String,
+              rangeError == .success, let rangeVal = selectedRangeValue else {
+            simulateKeyboardTyping(text)
+            return
+        }
+        
+        var range = CFRange()
+        guard AXValueGetValue(rangeVal as! AXValue, .cfRange, &range) else {
+            simulateKeyboardTyping(text)
+            return
+        }
+        
+        // 3. Insert prediction text at cursor position by replacing the selected range
+        let nsFullText = fullText as NSString
+        let prefix = nsFullText.substring(to: range.location)
+        let suffix = nsFullText.substring(from: range.location + range.length)
+        let newFullText = prefix + text + suffix
+        
+        // 4. Update kAXValueAttribute with the new complete string
+        let setStatus = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, newFullText as CFTypeRef)
+        
+        if setStatus == .success {
+            // 5. Move cursor to the end of the inserted text
+            let newCursorLocation = range.location + text.count
+            var newRange = CFRange(location: newCursorLocation, length: 0)
+            if let newRangeValue = AXValueCreate(.cfRange, &newRange) {
+                _ = AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, newRangeValue)
+            }
+        } else {
+            simulateKeyboardTyping(text)
+        }
+    }
+    
+    private func simulateKeyboardTyping(_ text: String) {
         let source = CGEventSource(stateID: .combinedSessionState)
         let utf16Chars = Array(text.utf16)
         
