@@ -10,6 +10,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var currentPrefix: String?
     var currentAppName: String?
     var isOverlayVisible = false
+    var isInGracePeriod = false
     
     private var eventTap: CFRunLoopSource?
     
@@ -65,6 +66,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return false // Let our simulated events pass through
         }
         
+        if isInGracePeriod {
+            return false // During grace period, all keys pass silently
+        }
+        
         guard isOverlayVisible else {
             return false
         }
@@ -84,6 +89,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                         // This completion runs after the keystroke simulation finishes typing the word + space
                         StyleDB.shared.saveCompletion(appName: appName, prefix: prefix, acceptedText: word)
                         print("✅ Accepted word: [\(word)]")
+                        
+                        // Add a 500ms cooldown after any Tab word acceptance
+                        ContextHarvester.shared.isCoolingDown = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(500)) {
+                            ContextHarvester.shared.isCoolingDown = false
+                        }
                         
                         GhostOverlay.shared.currentWordIndex += 1
                         
@@ -143,6 +154,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         currentPrefix = nil
         currentAppName = nil
         isOverlayVisible = false
+        
+        isInGracePeriod = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(200)) { [weak self] in
+            self?.isInGracePeriod = false
+        }
     }
     
     private func injectWordViaKeyboard(word: String, fragment: String, completion: @escaping () -> Void) {

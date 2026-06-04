@@ -4,6 +4,7 @@ import ApplicationServices
 class ContextHarvester {
     static let shared = ContextHarvester()
     
+    var isCoolingDown = false
     private var lastActiveAppBundleId: String?
     private var typingTimer: Timer?
     private var keyboardMonitor: Any?
@@ -71,8 +72,11 @@ class ContextHarvester {
     }
     
     private func harvestContext() {
+        guard !isCoolingDown else { return }
+        
         let activeAppName = NSWorkspace.shared.frontmostApplication?.localizedName ?? "Unknown"
-        let (prefix, suffix) = getSurroundingText()
+        let (rawPrefix, suffix) = getSurroundingText()
+        let prefix = deduplicateConsecutiveWords(in: rawPrefix)
         
         print("✍️ Typing paused (300ms) in: \(activeAppName)")
         print("  - Prefix: \(prefix)")
@@ -185,5 +189,24 @@ class ContextHarvester {
         let suffix = Range(suffixNSRange, in: fullText).map { String(fullText[$0]) } ?? ""
         
         return (String(prefix.suffix(500)), suffix)
+    }
+    
+    private func deduplicateConsecutiveWords(in text: String) -> String {
+        let components = text.components(separatedBy: " ")
+        var deduplicated: [String] = []
+        var lastWord: String?
+        
+        for component in components {
+            if component.isEmpty {
+                deduplicated.append(component)
+                continue
+            }
+            if component.lowercased() == lastWord?.lowercased() {
+                continue
+            }
+            deduplicated.append(component)
+            lastWord = component
+        }
+        return deduplicated.joined(separator: " ")
     }
 }
