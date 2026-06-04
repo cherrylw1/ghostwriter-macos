@@ -13,6 +13,7 @@
 		242D15D92A00000100000030 /* GroqClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242D15D92A00000100000031 /* GroqClient.swift */; };
 		242D15D92A00000100000040 /* ScreenshotContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242D15D92A00000100000041 /* ScreenshotContext.swift */; };
 		242D15D92A00000100000050 /* StyleDB.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242D15D92A00000100000051 /* StyleDB.swift */; };
+		242D15D92A00000100000060 /* GhostOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 242D15D92A00000100000061 /* GhostOverlay.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -22,6 +23,7 @@
 		242D15D92A00000100000031 /* GroqClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroqClient.swift; sourceTree = "<group>"; };
 		242D15D92A00000100000041 /* ScreenshotContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotContext.swift; sourceTree = "<group>"; };
 		242D15D92A00000100000051 /* StyleDB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StyleDB.swift; sourceTree = "<group>"; };
+		242D15D92A00000100000061 /* GhostOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GhostOverlay.swift; sourceTree = "<group>"; };
 		242D15D92A00000100000005 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		242D15D92A00000100000006 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		242D15D92A00000100000007 /* GhostWriter.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GhostWriter.entitlements; sourceTree = "<group>"; };
@@ -55,6 +57,7 @@
 				242D15D92A00000100000031 /* GroqClient.swift */,
 				242D15D92A00000100000041 /* ScreenshotContext.swift */,
 				242D15D92A00000100000051 /* StyleDB.swift */,
+				242D15D92A00000100000061 /* GhostOverlay.swift */,
 				242D15D92A00000100000006 /* Info.plist */,
 				242D15D92A00000100000007 /* GhostWriter.entitlements */,
 			);
@@ -144,6 +147,7 @@
 				242D15D92A00000100000030 /* GroqClient.swift in Sources */,
 				242D15D92A00000100000040 /* ScreenshotContext.swift in Sources */,
 				242D15D92A00000100000050 /* StyleDB.swift in Sources */,
+				242D15D92A00000100000060 /* GhostOverlay.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -34,8 +34,11 @@ class ContextHarvester {
         if let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication {
             logActiveApp(app)
             
-            // Re-attempt keyboard monitor setup in case permission was granted
+            // Re-attempt keyboard monitor and event tap setup in case permission was granted
             setupKeyboardObserver()
+            DispatchQueue.main.async {
+                AppDelegate.shared?.setupEventTap()
+            }
         }
     }
     
@@ -94,6 +97,17 @@ class ContextHarvester {
                 
                 print("🤖 Prediction: \(prediction)")
                 print("💾 Style DB ready to record on Tab accept")
+                
+                // Display autocomplete ghost overlay at text cursor
+                if let cursorRect = self.getFocusedElementCursorRect() {
+                    await GhostOverlay.shared.show(text: prediction, at: cursorRect)
+                    
+                    if let delegate = AppDelegate.shared {
+                        delegate.currentPrediction = prediction
+                        delegate.currentPrefix = prefix
+                        delegate.currentAppName = activeAppName
+                    }
+                }
             } catch is CancellationError {
                 // Silently ignore cooperative cancellation
             } catch let error as URLError where error.code == .cancelled {
@@ -102,6 +116,28 @@ class ContextHarvester {
                 print("❌ Groq error: \(error.localizedDescription)")
             }
         }
+    }
+    
+    private func getFocusedElementCursorRect() -> CGRect? {
+        let systemWide = AXUIElementCreateSystemWide()
+        var focusedElementObj: AnyObject?
+        let error = AXUIElementCopyAttributeValue(systemWide, kAXFocusedUIElementAttribute as CFString, &focusedElementObj)
+        guard error == .success, let focusedElement = focusedElementObj else {
+            return nil
+        }
+        
+        var rectValue: AnyObject?
+        let rectError = AXUIElementCopyAttributeValue(focusedElement as! AXUIElement, "AXSelectedTextBounds" as CFString, &rectValue)
+        guard rectError == .success, let val = rectValue else {
+            return nil
+        }
+        
+        var rect = CGRect.zero
+        if AXValueGetValue(val as! AXValue, .cgRect, &rect) {
+            return rect
+        }
+        
+        return nil
     }
     
     private func getSurroundingText() -> (prefix: String, suffix: String) {
