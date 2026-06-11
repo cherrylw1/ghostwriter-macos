@@ -1,0 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+@config "../../tailwind.config.ts";
+
+:root {
+  --font-playfair: 'Playfair Display', Georgia, serif;
+  --font-inter: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #110D0A;
+  color: #F5F0EB;
+  font-family: var(--font-inter);
+  font-size: 16px;
+  line-height: 1.7;
+  min-height: 100vh;
+}
+
+::selection {
+  background-color: #D4900C;
+  color: #110D0A;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #110D0A;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3D3028;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #6B5E54;
+}
+
+.font-display {
+  font-family: var(--font-playfair);
+}
